@@ -226,42 +226,70 @@ def test_resolve_video_model_routes_by_tier_quality_aspect():
         "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_PORTRAIT", "fast"
     ) == "veo_3_1_i2v_s_fast_portrait_ultra"
 
-    # Lite is a Tier 2 (Ultra) exclusive — multi-aspect, same key for
-    # landscape and portrait.
+    # Lite — multi-aspect, same key for landscape and portrait. Both
+    # tiers share the `veo_3_1_i2v_lite` checkpoint (verified from PRO
+    # PLAN curl in video_model.md AND ULTRA PLAN curl in
+    # video_model_ultra.md); the per-tier difference is `userPaygateTier`
+    # in clientContext, not the model key.
     assert resolve_video_model(
         "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_LANDSCAPE", "lite"
-    ) == "veo_3_1_t2v_lite"
+    ) == "veo_3_1_i2v_lite"
     assert resolve_video_model(
         "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_PORTRAIT", "lite"
-    ) == "veo_3_1_t2v_lite"
-
-    # Tier 1 has no Lite checkpoint — a stale frontend that asks for Lite
-    # at Tier 1 must fall back to Tier 1 Fast rather than crash or silently
-    # dispatch a Tier 2-only model the user is not paygated for.
+    ) == "veo_3_1_i2v_lite"
     assert resolve_video_model(
         "PAYGATE_TIER_ONE", "VIDEO_ASPECT_RATIO_LANDSCAPE", "lite"
-    ) == "veo_3_1_i2v_s_fast"
+    ) == "veo_3_1_i2v_lite"
     assert resolve_video_model(
         "PAYGATE_TIER_ONE", "VIDEO_ASPECT_RATIO_PORTRAIT", "lite"
-    ) == "veo_3_1_i2v_s_fast_portrait"
+    ) == "veo_3_1_i2v_lite"
 
-    # Tier 2 Quality — third quality tier (xịn hơn Fast, slower). Portrait
-    # key verified from a real labs.google curl; landscape key follows the
-    # same drop-`_portrait` naming convention used everywhere else.
+    # Quality — third quality tier (xịn hơn Fast, slower). Both tiers
+    # share the `veo_3_1_i2v_s*` family; the difference is the
+    # `userPaygateTier` in clientContext, not the model key. Landscape
+    # key verified from PRO PLAN curl in video_model.md; portrait key
+    # verified from an Ultra labs.google curl and reused for Pro.
     assert resolve_video_model(
         "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_LANDSCAPE", "quality"
     ) == "veo_3_1_i2v_s"
     assert resolve_video_model(
         "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_PORTRAIT", "quality"
     ) == "veo_3_1_i2v_s_portrait"
-
-    # Tier 1 has no Quality checkpoint either — same fallback story as Lite.
     assert resolve_video_model(
         "PAYGATE_TIER_ONE", "VIDEO_ASPECT_RATIO_LANDSCAPE", "quality"
-    ) == "veo_3_1_i2v_s_fast"
+    ) == "veo_3_1_i2v_s"
     assert resolve_video_model(
         "PAYGATE_TIER_ONE", "VIDEO_ASPECT_RATIO_PORTRAIT", "quality"
-    ) == "veo_3_1_i2v_s_fast_portrait"
+    ) == "veo_3_1_i2v_s_portrait"
+
+    # Lite Relaxed — Ultra-only 0-credit low-priority queue. Verified
+    # LANDSCAPE key from ULTRA PLAN curl in video_model_ultra.md;
+    # portrait reuses the same key (multi-aspect, same as plain lite).
+    # Tier 1 has no `lite_relaxed` mapping → falls back to Tier 1 fast.
+    assert resolve_video_model(
+        "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_LANDSCAPE", "lite_relaxed"
+    ) == "veo_3_1_i2v_lite_low_priority"
+    assert resolve_video_model(
+        "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_PORTRAIT", "lite_relaxed"
+    ) == "veo_3_1_i2v_lite_low_priority"
+    assert resolve_video_model(
+        "PAYGATE_TIER_ONE", "VIDEO_ASPECT_RATIO_LANDSCAPE", "lite_relaxed"
+    ) == "veo_3_1_i2v_s_fast"
+
+    # Fast Relaxed — Ultra-only 0-credit low-priority queue. Verified
+    # LANDSCAPE key from ULTRA PLAN curl in video_model_ultra.md;
+    # portrait reuses the LANDSCAPE key as best-effort fallback (no
+    # portrait curl observed yet). Tier 1 has no `fast_relaxed` mapping
+    # → falls back to Tier 1 fast.
+    assert resolve_video_model(
+        "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_LANDSCAPE", "fast_relaxed"
+    ) == "veo_3_1_i2v_s_fast_ultra_relaxed"
+    assert resolve_video_model(
+        "PAYGATE_TIER_TWO", "VIDEO_ASPECT_RATIO_PORTRAIT", "fast_relaxed"
+    ) == "veo_3_1_i2v_s_fast_ultra_relaxed"
+    assert resolve_video_model(
+        "PAYGATE_TIER_ONE", "VIDEO_ASPECT_RATIO_LANDSCAPE", "fast_relaxed"
+    ) == "veo_3_1_i2v_s_fast"
 
     # Default quality (None / empty) → fast.
     assert resolve_video_model(

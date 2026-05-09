@@ -17,9 +17,10 @@ const COMMUNITY_URL = "https://www.facebook.com/groups/flowkit.flowboard.communi
  * Surfaces the model context that drives every generation:
  *   - Paygate tier — auto-detected from Flow's createProject response,
  *     read-only (this isn't user-selectable, it's a fact of their plan).
- *   - Video quality — Veo 3.1 Fast vs Lite. Applies to BOTH portrait
- *     and landscape; backend resolves [tier][quality][aspect] →
- *     concrete Flow model key.
+ *   - Video quality — Veo 3.1 Lite / Fast / Quality, plus Ultra-only
+ *     Lite Relaxed / Fast Relaxed (0-credit low-priority queue). Applies
+ *     to BOTH portrait and landscape; backend resolves
+ *     [tier][quality][aspect] → concrete Flow model key.
  *   - Image model — Banana Pro vs Banana 2 picker. Persisted to
  *     localStorage; every gen_image / edit_image dispatch reads it.
  */
@@ -37,14 +38,21 @@ const IMAGE_MODELS: { key: ImageModelKey; label: string; hint: string }[] = [
   },
 ];
 
-// Order: lite → fast → quality, light to heavy. Lite and Quality are
-// Tier 2 (Ultra) exclusives — Tier 1 users see them locked.
-const VIDEO_QUALITIES: { key: VideoQuality; label: string; hint: string; ultraOnly: boolean }[] = [
+// Order: lite → fast → quality (paid), then the Ultra-only relaxed
+// variants (0-credit low-priority queue). Lite/Fast/Quality are
+// available on both Pro (Tier 1) and Ultra (Tier 2); the *_relaxed
+// entries are Ultra-only — Pro users see them locked.
+const VIDEO_QUALITIES: {
+  key: VideoQuality;
+  label: string;
+  hint: string;
+  ultraOnly: boolean;
+}[] = [
   {
     key: "lite",
     label: "Veo 3.1 Lite",
     hint: "Fastest generation, lightest model. Applies to both 16:9 and 9:16.",
-    ultraOnly: true,
+    ultraOnly: false,
   },
   {
     key: "fast",
@@ -56,6 +64,18 @@ const VIDEO_QUALITIES: { key: VideoQuality; label: string; hint: string; ultraOn
     key: "quality",
     label: "Veo 3.1 Quality",
     hint: "Highest fidelity, slowest. Best for hero shots. Applies to both 16:9 and 9:16.",
+    ultraOnly: false,
+  },
+  {
+    key: "lite_relaxed",
+    label: "Veo 3.1 Lite (Low Priority)",
+    hint: "Same Lite checkpoint, low-priority queue — 0 credits. Slower turnaround when Flow is busy.",
+    ultraOnly: true,
+  },
+  {
+    key: "fast_relaxed",
+    label: "Veo 3.1 Fast (Low Priority)",
+    hint: "Same Fast checkpoint, low-priority queue — 0 credits. Slower turnaround when Flow is busy.",
     ultraOnly: true,
   },
 ];
@@ -158,12 +178,12 @@ export function SettingsPanel({ open, onClose, onLogout, logoutPending }: Settin
         <div className="settings-panel__label">Video model</div>
         <div className="settings-panel__radio-group">
           {VIDEO_QUALITIES.map((q) => {
-            // Lite and Quality are exclusive to Tier 2 (Ultra). Tier 1
-            // users who pick either would silently fall back to Fast on
-            // the backend — disable the option here so the UI never lies
-            // about which checkpoint is actually being dispatched.
-            const isUltraOnly = q.ultraOnly;
-            const locked = isUltraOnly && tier !== "PAYGATE_TIER_TWO";
+            // *_relaxed variants are Ultra-only — Pro users picking
+            // either would silently fall back to Fast on the backend
+            // (no Tier 1 mapping in VIDEO_MODEL_KEYS). Disable the
+            // option here so the UI never lies about which checkpoint
+            // is actually being dispatched.
+            const locked = q.ultraOnly && tier !== "PAYGATE_TIER_TWO";
             return (
               <label
                 key={q.key}
@@ -180,7 +200,7 @@ export function SettingsPanel({ open, onClose, onLogout, logoutPending }: Settin
                 <div>
                   <div className="settings-panel__radio-label">
                     {q.label}
-                    {isUltraOnly && (
+                    {q.ultraOnly && (
                       <span className="model-badge">Ultra only</span>
                     )}
                   </div>

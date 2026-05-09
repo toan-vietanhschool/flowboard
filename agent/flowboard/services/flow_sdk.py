@@ -53,35 +53,63 @@ def resolve_image_model(key: Optional[str]) -> str:
 # against real Flow web request bodies (curl exports from labs.google's
 # Network tab) — do NOT speculate suffixes here, only use observed keys.
 #
-# `quality` is "fast" (default — the `_i2v_s_fast*` family) or "lite"
-# (`veo_3_1_t2v_lite` — despite the t2v prefix in the name, this
-# checkpoint accepts startImage just fine when sent through the
-# `:batchAsyncGenerateVideoStartImage` endpoint, verified against a
-# real Flow web request). Lite is multi-aspect — same key for both
-# 16:9 and 9:16; the model adapts via the aspectRatio field.
-#
-# Tier 2 Fast naming pattern: Tier 1 Fast key + `_ultra` suffix
-# (e.g. `veo_3_1_i2v_s_fast` → `veo_3_1_i2v_s_fast_ultra`,
-# `veo_3_1_i2v_s_fast_portrait` → `veo_3_1_i2v_s_fast_portrait_ultra`).
+# `quality` is "fast" (default), "lite", "quality", or — Ultra only —
+# "lite_relaxed" / "fast_relaxed" (0-credit low-priority queue).
+#   - Lite (`veo_3_1_i2v_lite`) is shared by Tier 1 and Tier 2; verified
+#     from PRO PLAN and ULTRA PLAN curls (see video_model.md and
+#     video_model_ultra.md). Multi-aspect — same key for both 16:9 and
+#     9:16; the model adapts via the aspectRatio field.
+#   - Quality (`veo_3_1_i2v_s` / `veo_3_1_i2v_s_portrait`) is also shared
+#     across both tiers; the difference is the `userPaygateTier` in
+#     clientContext (rate limits / queue priority), not the model key.
+#   - Tier 2 Fast naming pattern: Tier 1 Fast key + `_ultra` suffix
+#     (e.g. `veo_3_1_i2v_s_fast` → `veo_3_1_i2v_s_fast_ultra`,
+#     `veo_3_1_i2v_s_fast_portrait` → `veo_3_1_i2v_s_fast_portrait_ultra`).
+#   - Tier 2 "low priority" 0-credit models (Ultra-only fallback when the
+#     user wants to keep their daily credit budget): Lite uses the
+#     `_low_priority` suffix (`veo_3_1_i2v_lite_low_priority`); Fast uses
+#     the `_relaxed` suffix on the ultra family (`veo_3_1_i2v_s_fast_ultra_relaxed`).
+#     Verified from ULTRA PLAN curls. PORTRAIT keys for these are not yet
+#     observed — we reuse the LANDSCAPE key for both aspects (Lite is
+#     genuinely multi-aspect; Fast Relaxed portrait will need a real curl
+#     to confirm, but Flow's portrait variants typically follow the
+#     `_portrait` suffix convention if separate keys are required).
 VIDEO_MODEL_KEYS: dict[str, dict[str, dict[str, str]]] = {
-    # Tier 1 (Pro) — only Fast quality. Lite and Quality are Tier 2 perks.
+    # Tier 1 (Pro) — three quality levels, all verified from real PRO
+    # PLAN curls (see video_model.md). Lite shares `veo_3_1_i2v_lite`
+    # with Tier 2; Quality shares `veo_3_1_i2v_s` with Tier 2 — paygate
+    # tier in clientContext drives any per-tier difference. No 0-credit
+    # low-priority option here — that's a Tier 2 (Ultra) perk.
     "PAYGATE_TIER_ONE": {
+        "lite": {
+            "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_lite",
+            "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_lite",
+        },
         "fast": {
             "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s_fast",
             "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_portrait",
         },
+        "quality": {
+            "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s",
+            "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_portrait",
+        },
     },
-    # Tier 2 (Ultra) — three quality levels:
-    #   - lite: `veo_3_1_t2v_lite` (multi-aspect, fastest, lower fidelity)
-    #   - fast: `_fast_ultra` family (default, balanced)
-    #   - quality: `veo_3_1_i2v_s*` family (highest fidelity, slowest).
-    #     PORTRAIT key verified from a real labs.google curl
-    #     (`veo_3_1_i2v_s_portrait`); LANDSCAPE key derived from the same
-    #     naming convention used by Fast (drop `_portrait` for landscape).
+    # Tier 2 (Ultra) — five quality levels:
+    #   - lite: `veo_3_1_i2v_lite` (5 credits, multi-aspect)
+    #   - fast: `_fast_ultra` family (10 credits, default, balanced)
+    #   - quality: `veo_3_1_i2v_s*` family (highest fidelity, slowest)
+    #   - lite_relaxed: `veo_3_1_i2v_lite_low_priority` (0 credits,
+    #     low-priority queue, Ultra-only)
+    #   - fast_relaxed: `veo_3_1_i2v_s_fast_ultra_relaxed` (0 credits,
+    #     low-priority queue, Ultra-only).
+    #   PORTRAIT keys for the `_relaxed` family are not yet verified
+    #   from a real curl; we reuse the LANDSCAPE key as a best-effort
+    #   fallback. If Flow rejects portrait dispatches, capture a portrait
+    #   curl and add the proper key here.
     "PAYGATE_TIER_TWO": {
         "lite": {
-            "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_t2v_lite",
-            "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_t2v_lite",
+            "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_lite",
+            "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_lite",
         },
         "fast": {
             "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s_fast_ultra",
@@ -90,6 +118,14 @@ VIDEO_MODEL_KEYS: dict[str, dict[str, dict[str, str]]] = {
         "quality": {
             "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s",
             "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_portrait",
+        },
+        "lite_relaxed": {
+            "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_lite_low_priority",
+            "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_lite_low_priority",
+        },
+        "fast_relaxed": {
+            "VIDEO_ASPECT_RATIO_LANDSCAPE": "veo_3_1_i2v_s_fast_ultra_relaxed",
+            "VIDEO_ASPECT_RATIO_PORTRAIT": "veo_3_1_i2v_s_fast_ultra_relaxed",
         },
     },
 }
@@ -276,8 +312,12 @@ class FlowSDK:
         videos in a single batch (one operation per source). Falls back to
         ``start_media_id`` (single) if the list is missing/empty.
 
-        ``video_quality`` ("fast" / "lite") routes to a different Veo
-        checkpoint. Defaults to "fast" — the existing `_s_fast` family.
+        ``video_quality`` ("fast" / "lite" / "quality" / "lite_relaxed"
+        / "fast_relaxed") routes to a different Veo checkpoint. Defaults
+        to "fast" — the `_s_fast` family. The first three are available
+        on both Tier 1 (Pro) and Tier 2 (Ultra); the `_relaxed` variants
+        are 0-credit low-priority queues and are Ultra-only. See
+        ``VIDEO_MODEL_KEYS`` for the per-tier mapping.
 
         ``paygate_tier`` is required. Pre-v1.1.5 it defaulted to
         ``"PAYGATE_TIER_ONE"`` which silently downgraded Ultra users.
