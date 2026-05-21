@@ -576,19 +576,20 @@ async def test_auto_prompt_video_uses_motion_system_prompt(client, monkeypatch):
     assert "dolly-in" in out
     assert "motion" in (captured["system_prompt"] or "").lower()
     assert "Korean woman" in captured["prompt"]
-    # Audio guard — must direct silent / no-dialogue by default.
-    # Veo's audio path triggers PUBLIC_MIRROR_AUDIO_FILTER on portraits
-    # the moment speech is generated, killing the entire request, so
-    # the synth has to instruct silent unless the user explicitly
-    # asked for dialogue.
+    # Audio guard — must direct no-speech by default (audio filter
+    # constraint) but ALLOW a soft background music bed so portrait
+    # clips don't render dead-silent. Veo's audio path triggers
+    # PUBLIC_MIRROR_AUDIO_FILTER on portraits the moment speech is
+    # generated, killing the entire request, so the synth has to
+    # instruct no-speech unless the user explicitly asked for dialogue.
     sp = captured["system_prompt"] or ""
     assert "AUDIO" in sp
-    assert "SILENT BY DEFAULT" in sp
+    assert "NO SPEECH" in sp
     assert "PUBLIC_MIRROR_AUDIO_FILTER" in sp
-    # SFX + music guidance present so the user's clip isn't completely
-    # bare when default-silent fires.
+    # SFX + background music guidance present so the user's clip has
+    # a gentle audio bed by default (not pure silence).
     assert "SFX" in sp
-    assert "MUSIC" in sp
+    assert "BACKGROUND MUSIC" in sp
 
 
 @pytest.mark.asyncio
