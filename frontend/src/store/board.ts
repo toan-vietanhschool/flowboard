@@ -463,8 +463,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       };
       set((s) => ({ nodes: [...s.nodes, node] }));
       return node.id;
-    } catch {
-      // surface silently for now
+    } catch (err) {
+      // Surface to console so the next "I clicked Add but nothing
+      // appeared" report has a breadcrumb in DevTools instead of an
+      // empty canvas — a 422 here usually means the backend's NodeType
+      // literal is out of sync with the frontend's NodeType union.
+      console.error("addNodeOfType failed", { type, err });
     }
     return null;
   },

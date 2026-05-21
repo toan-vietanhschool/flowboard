@@ -10,7 +10,18 @@ from flowboard.short_id import generate_unique_short_id
 
 router = APIRouter(prefix="/api/nodes", tags=["nodes"])
 
-NodeType = Literal["character", "image", "video", "prompt", "note", "visual_asset"]
+NodeType = Literal[
+    "character",
+    "image",
+    "video",
+    "prompt",
+    "note",
+    "visual_asset",
+    # Storyboard = thin image-node wrapper. Backend treats it the same as
+    # `image` for storage / dispatch — see frontend/src/lib/storyboardPrompt.ts
+    # for the template that drives gen_image.
+    "Storyboard",
+]
 NodeStatus = Literal["idle", "queued", "running", "done", "error"]
 
 _COORD_MIN = -1_000_000.0
